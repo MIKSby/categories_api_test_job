@@ -1,6 +1,7 @@
 from typing import Dict, Any, List
 
 from rest_framework import serializers
+from rest_framework.exceptions import ValidationError
 
 from simple_categories_app.models import Category
 
@@ -48,3 +49,22 @@ class CategoryCreateSerializer(serializers.Serializer):
         self.objs: List[Dict[str, Any]] = []
         self.storing_json(self.initial_data)
         return self.objs
+
+    def get_names_and_check_schema(self, data: Dict[str, Any]) -> None:
+        len_keys = len(data.keys())
+        if not (1 <= len_keys <= 2) or 'name' not in data.keys():
+            raise ValidationError('incorrect data')
+        self.names.add(data['name'])
+
+        if data.get('children') and len_keys == 2:
+            for children in data['children']:
+                self.get_names_and_check_schema(children)
+        elif not data.get('children') and len_keys == 2:
+            raise ValidationError('incorrect data')
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        self.names = set()
+        self.get_names_and_check_schema(dict(self.initial_data))
+        if Category.objects.filter(name__in=self.names).exists():
+            raise ValidationError('category name exists')
+        return attrs
